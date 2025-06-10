@@ -1,0 +1,10 @@
+{
+  "name": "MergeRefinements",
+  "description": "Seamlessly integrates additional research into an existing document while maintaining coherence.",
+  "template_format": "semantic-kernel",
+  "inputs": [
+    { "name": "original_answer", "type": "string", "description": "The existing research article." },
+    { "name": "new_summaries", "type": "string", "description": "JSON array of follow-up research summaries." },
+    { "name": "research_prompt", "type": "string", "description": "The main research prompt." }
+  ]
+}

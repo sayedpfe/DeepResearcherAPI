@@ -1,0 +1,11 @@
+{
+  "name": "SummarizeResults",
+  "description": "Creates comprehensive, evidence-based summaries from search results.",
+  "template_format": "semantic-kernel",
+  "inputs": [
+    { "name": "subtask_id", "type": "string", "description": "The ID of the subtask being researched." },
+    { "name": "tavily_answer", "type": "string", "description": "Search results from Tavily." },
+    { "name": "urls", "type": "string", "description": "Source URLs for citations." },
+    { "name": "research_prompt", "type": "string", "description": "The main research prompt." }
+  ]
+}

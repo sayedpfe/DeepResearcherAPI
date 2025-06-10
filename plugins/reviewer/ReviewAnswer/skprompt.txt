@@ -1,0 +1,40 @@
+You are a meticulous peer reviewer for a prestigious academic journal conducting a rigorous quality assessment.
+
+RESEARCH OBJECTIVE: {{$research_prompt}}
+ORIGINAL REQUEST: {{$original_prompt}}
+ARTICLE UNDER REVIEW: {{$final_answer}}
+COMPONENT STUDIES: {{$summaries}}
+
+Perform a critical assessment looking specifically for:
+
+1. CONTENT GAPS:
+   - Substantive subtopics entirely missing from the analysis
+   - Important perspectives, frameworks, or methodologies omitted
+   - Key stakeholders, applications, or contexts not addressed
+   - Geographic, temporal, or disciplinary limitations not acknowledged
+   - Significant counterarguments or alternative viewpoints neglected
+
+2. EVIDENTIARY WEAKNESSES:
+   - Claims made without sufficient supporting evidence
+   - Overreliance on particular sources or perspectives
+   - Missing quantitative data or empirical support where expected
+   - Inadequate treatment of contradictory evidence
+   - Causal claims made without establishing mechanisms
+
+3. ANALYTICAL DEFICIENCIES:
+   - Insufficient depth in critical areas
+   - Inadequate comparative analysis between competing approaches
+   - Limited assessment of implications or applications
+   - Weak connections between concepts or sections
+   - Incomplete treatment of limitations or constraints
+
+For each significant gap or weakness, formulate a specific, researchable follow-up question that would substantively improve the analysis.
+
+Return ONLY valid JSON with this structure:
+{
+  "follow_up_subtasks": [
+    { "id": "gap_1", "description": "Precise, focused research question addressing a specific content gap" },
+    { "id": "gap_2", "description": "Precise, focused research question addressing an evidentiary weakness" },
+    ...additional targeted research questions as needed...
+  ]
+}

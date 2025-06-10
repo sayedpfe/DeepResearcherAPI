@@ -1,0 +1,9 @@
+{
+  "name": "ExtractTopic",
+  "description": "Identifies the precise research topic from a user request.",
+  "template_format": "semantic-kernel",
+  "inputs": [
+    { "name": "user_prompt", "type": "string", "description": "The user's research request." },
+    { "name": "research_prompt", "type": "string", "description": "The clarified research prompt." }
+  ]
+}

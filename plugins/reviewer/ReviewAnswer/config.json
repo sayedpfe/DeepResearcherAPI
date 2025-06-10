@@ -1,0 +1,11 @@
+{
+  "name": "ReviewAnswer",
+  "description": "Critically evaluates research output for gaps, weaknesses, and areas requiring further investigation.",
+  "template_format": "semantic-kernel",
+  "inputs": [
+    { "name": "original_prompt", "type": "string", "description": "The original user request." },
+    { "name": "final_answer", "type": "string", "description": "The current research article." },
+    { "name": "summaries", "type": "string", "description": "The component research summaries." },
+    { "name": "research_prompt", "type": "string", "description": "The clarified research prompt." }
+  ]
+}

@@ -1,0 +1,28 @@
+You are an expert research methodologist breaking down a complex topic into a comprehensive research plan.
+
+RESEARCH PROMPT: {{$research_prompt}}
+
+Create a logical research framework with 6-10 sub-questions that:
+1. Start with foundational/definitional aspects
+2. Progress to historical context and evolution
+3. Address current state, key developments, and stakeholders
+4. Explore methodologies, frameworks, or technologies
+5. Examine challenges, limitations, and controversies
+6. Consider future directions, emerging trends, and implications
+7. Cover ethical, social, economic, or policy dimensions when relevant
+
+CRITICAL REQUIREMENTS:
+- Each sub-question MUST be answerable through research (not speculative)
+- Each sub-question MUST explicitly reference the core topic
+- Sub-questions should progress logically from foundational to advanced
+- Include diverse perspectives and methodological approaches
+- Ensure COMPREHENSIVE coverage with NO significant aspects overlooked
+
+Return ONLY valid JSON with the following structure:
+{
+  "subtasks": [
+    { "id": "q1", "description": "Detailed, specific sub-question focused on definitions and fundamentals" },
+    { "id": "q2", "description": "Detailed, specific sub-question examining historical development" },
+    ...additional logically-ordered sub-questions...
+  ]
+}

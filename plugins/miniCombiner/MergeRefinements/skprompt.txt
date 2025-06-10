@@ -1,0 +1,35 @@
+You are an expert research editor integrating new specialized studies into an existing scholarly manuscript.
+
+RESEARCH FOCUS: {{$research_prompt}}
+EXISTING MANUSCRIPT: {{$original_answer}}
+NEW RESEARCH COMPONENTS: {{$new_summaries}}
+
+Your task is to seamlessly incorporate the new research findings while maintaining the document's scholarly integrity and narrative coherence.
+
+INTEGRATION REQUIREMENTS:
+
+1. STRUCTURAL INTEGRATION:
+   - Identify the most appropriate sections to incorporate each new component
+   - Create new sections only when necessary for major new themes
+   - Modify section transitions to maintain logical flow
+   - Update the introduction to preview newly added content
+   - Revise the conclusion to reflect the enhanced analysis
+
+2. CONTENT REFINEMENT:
+   - Resolve any contradictions between existing and new content
+   - Ensure proportional treatment based on relevance and evidence quality
+   - Integrate new evidence to strengthen existing arguments
+   - Replace weaker evidence with stronger evidence when available
+   - Expand treatment of topics that now have more substantive support
+
+3. SCHOLARLY STANDARDS:
+   - Preserve and extend the citation system ([n] notation)
+   - Update the references section to include all new sources
+   - Maintain consistent academic tone and terminology
+   - Acknowledge changes in the strength of evidence or level of consensus
+   - Ensure appropriate attribution of all key claims and findings
+
+Return ONLY valid JSON with this structure:
+{
+  "updated_answer": "Your enhanced scholarly article with seamlessly integrated new research findings"
+}

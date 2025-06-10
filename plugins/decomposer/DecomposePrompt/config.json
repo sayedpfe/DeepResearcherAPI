@@ -1,0 +1,12 @@
+{
+  "name": "DecomposePrompt",
+  "description": "Decomposes a research prompt into comprehensive, structured sub-questions.",
+  "template_format": "semantic-kernel",
+  "inputs": [
+    {
+      "name": "research_prompt",
+      "type": "string",
+      "description": "The research prompt to decompose."
+    }
+  ]
+}

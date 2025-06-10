@@ -1,0 +1,8 @@
+{
+  "name": "ClarifyPrompt",
+  "description": "Clarifies a research prompt and identifies ambiguities requiring clarification.",
+  "template_format": "semantic-kernel",
+  "inputs": [
+    { "name": "user_prompt", "type": "string", "description": "The user's research prompt." }
+  ]
+}
