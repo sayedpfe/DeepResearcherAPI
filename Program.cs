@@ -24,14 +24,29 @@ try
     var kernelBuilder = Kernel.CreateBuilder();
 
     // Register all the plugins
-    kernelBuilder.Plugins.AddFromPromptDirectory("plugins/clarifier");
-    kernelBuilder.Plugins.AddFromPromptDirectory("plugins/decomposer");
-    kernelBuilder.Plugins.AddFromPromptDirectory("plugins/summarizer");
-    kernelBuilder.Plugins.AddFromPromptDirectory("plugins/combiner");
-    kernelBuilder.Plugins.AddFromPromptDirectory("plugins/reviewer");
-    kernelBuilder.Plugins.AddFromPromptDirectory("plugins/miniCombiner");
-    kernelBuilder.Plugins.AddFromPromptDirectory("plugins/extractor");
+    string basePath = Path.Combine(builder.Environment.ContentRootPath, "plugins");
 
+    //kernelBuilder.Plugins.AddFromPromptDirectory(basePath+"/clarifier");
+    //kernelBuilder.Plugins.AddFromPromptDirectory(basePath + "/decomposer");
+    //kernelBuilder.Plugins.AddFromPromptDirectory(basePath + "/summarizer");
+    //kernelBuilder.Plugins.AddFromPromptDirectory(basePath + "/combiner");
+    //kernelBuilder.Plugins.AddFromPromptDirectory(basePath + "/reviewer");
+    //kernelBuilder.Plugins.AddFromPromptDirectory(basePath + "/miniCombiner");
+    //kernelBuilder.Plugins.AddFromPromptDirectory(basePath + "/extractor");
+    string[] pluginDirectories = { "clarifier", "decomposer", "summarizer", "combiner", "reviewer", "miniCombiner", "extractor" };
+    
+    foreach (var dir in pluginDirectories)
+    {
+        string pluginPath = Path.Combine(basePath, dir);
+        if (Directory.Exists(pluginPath))
+        {
+            kernelBuilder.Plugins.AddFromPromptDirectory(pluginPath);
+            
+        }
+        else
+        {
+        }
+    }
     // Add OpenAI service
     kernelBuilder.AddAzureOpenAIChatCompletion(
         deploymentName: config["OpenAI:ChatDeployment"]!,
@@ -76,6 +91,9 @@ try
         });
     });
     
+    // Disable Azure blob trace listener that's causing errors
+    builder.Logging.AddFilter("Microsoft.WindowsAzure.WebSites.Diagnostics.AzureBlobTraceListener", LogLevel.None);
+
     var app = builder.Build();
     
     // Enable CORS
