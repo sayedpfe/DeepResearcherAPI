@@ -1,28 +1,47 @@
-You are an expert research methodologist breaking down a complex topic into a comprehensive research plan.
+You are an expert research planner specializing in decomposing complex topics into well-structured research subtasks.
 
-RESEARCH PROMPT: {{$research_prompt}}
+TASK:
+Break down the research prompt into a comprehensive set of subtasks that together will produce a thorough investigation of the topic.
 
-Create a logical research framework with 6-10 sub-questions that:
-1. Start with foundational/definitional aspects
-2. Progress to historical context and evolution
-3. Address current state, key developments, and stakeholders
-4. Explore methodologies, frameworks, or technologies
-5. Examine challenges, limitations, and controversies
-6. Consider future directions, emerging trends, and implications
-7. Cover ethical, social, economic, or policy dimensions when relevant
+RESEARCH PROMPT:
+{{$research_prompt}}
 
-CRITICAL REQUIREMENTS:
-- Each sub-question MUST be answerable through research (not speculative)
-- Each sub-question MUST explicitly reference the core topic
-- Sub-questions should progress logically from foundational to advanced
-- Include diverse perspectives and methodological approaches
-- Ensure COMPREHENSIVE coverage with NO significant aspects overlooked
+YOUR DECOMPOSITION PROCESS:
+1. Identify the main research question and core concepts
+2. Consider multiple angles, perspectives, and dimensions of the topic
+3. Include historical context, current state, and future implications when relevant
+4. Ensure coverage of different schools of thought or opposing viewpoints
+5. Consider theoretical frameworks and practical applications
+6. Plan for both breadth (comprehensive coverage) and depth (detailed analysis)
 
-Return ONLY valid JSON with the following structure:
+CREATE A HIERARCHICAL RESEARCH PLAN:
+- Identify 5-10 primary research subtasks
+- For each subtask, identify 2-3 specific aspects to investigate
+- Prioritize subtasks by importance to the overall research goal
+
+FORMAT YOUR RESPONSE AS JSON:
 {
+  "researchGoal": "Concise statement of the overall research objective",
+  "methodology": "Brief description of the research approach",
   "subtasks": [
-    { "id": "q1", "description": "Detailed, specific sub-question focused on definitions and fundamentals" },
-    { "id": "q2", "description": "Detailed, specific sub-question examining historical development" },
-    ...additional logically-ordered sub-questions...
+    {
+      "id": "t1",
+      "description": "Clear description of the first research subtask",
+      "priority": "high|medium|low",
+      "aspects": ["Specific aspect 1", "Specific aspect 2", ...]
+    },
+    {
+      "id": "t2",
+      "description": "Clear description of the second research subtask",
+      "priority": "high|medium|low",
+      "aspects": ["Specific aspect 1", "Specific aspect 2", ...]
+    },
+    ...
   ]
 }
+
+Ensure each subtask is:
+- Focused on a specific aspect of the research
+- Concrete and answerable through research
+- Descriptive enough to guide a search for information (at least 2-3 sentences)
+- Independently researchable while contributing to the whole

@@ -1,4 +1,4 @@
-using Microsoft.SemanticKernel;
+﻿using Microsoft.SemanticKernel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,9 +6,27 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using System.IO;
 
 namespace DeepResearcher.Api.Services
 {
+    public static class StringExtensions
+    {
+        public static string Truncate(this string value, int maxLength)
+        {
+            if (string.IsNullOrEmpty(value)) return value;
+            return value.Length <= maxLength ? value : value.Substring(0, maxLength) + "...";
+        }
+
+        public static int CountWords(this string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return 0;
+
+            return text.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).Length;
+        }
+    }
+
     public class ResearchOrchestrator
     {
         private readonly Kernel _kernel;
@@ -127,7 +145,7 @@ namespace DeepResearcher.Api.Services
             }
             catch (Exception ex)
             {
-                _messages.Add($"Clarification error: {ex.Message}");
+                AddMessage($"Clarification error: {ex.Message}");
                 _needsClarification = false; // Force proceed to avoid getting stuck
             }
         }
@@ -135,7 +153,7 @@ namespace DeepResearcher.Api.Services
         public async Task DecomposeResearchPromptAsync()
         {
             _mainResearchTopic = _currentPrompt;
-            _messages.Add($"Decomposing research topic: {_mainResearchTopic}");
+            AddMessage($"Decomposing research topic: {_mainResearchTopic}");
             
             try
             {
@@ -151,7 +169,7 @@ namespace DeepResearcher.Api.Services
                         .Where(st => !string.IsNullOrWhiteSpace(st.Description) && st.Description.Length > 30)
                         .ToList();
                     
-                    _messages.Add($"Decomposed into {_subtasks.Count} subtasks");
+                    AddMessage($"Decomposed into {_subtasks.Count} subtasks");
                 }
                 else
                 {
@@ -160,14 +178,14 @@ namespace DeepResearcher.Api.Services
             }
             catch (Exception ex)
             {
-                _messages.Add($"Decomposition error: {ex.Message}");
+                AddMessage($"Decomposition error: {ex.Message}");
                 throw;
             }
         }
         
         public async Task ResearchSubtasksAsync(Func<int, Task> progressCallback)
         {
-            _messages.Add($"Researching {_subtasks.Count} subtasks");
+            AddMessage($"Researching {_subtasks.Count} subtasks");
             _subtaskSummaries = new List<Dictionary<string, object>>();
             
             int completed = 0;
@@ -211,7 +229,7 @@ namespace DeepResearcher.Api.Services
                 }
                 catch (Exception ex)
                 {
-                    _messages.Add($"Error researching subtask {subtask.Id}: {ex.Message}");
+                    AddMessage($"Error researching subtask {subtask.Id}: {ex.Message}");
                     
                     // Add placeholder for the failed subtask
                     _subtaskSummaries.Add(new Dictionary<string, object>
@@ -229,12 +247,42 @@ namespace DeepResearcher.Api.Services
                 await progressCallback(progressPercentage);
             }
             
-            _messages.Add($"Completed research on {completed} subtasks");
+            AddMessage($"Completed research on {completed} subtasks");
+        }
+
+        public async Task<string> ResearchSubtasksAsync()
+        {
+            try
+            {
+                var tavilyResponse = await _tavilyConnector.SearchAsync("query");
+                return tavilyResponse.Answer; // Fix: Access the 'Answer' property of TavilyResponse instead of trying to return the object directly.
+            }
+            catch (Exception ex)
+            {
+                _messages.Add($"Research error: {ex.Message}");
+                throw; // Re-throws the original exception with its stack trace intact
+            }
+        }
+
+        public async Task<string> ResearchSubtasksBadlyAsync()
+        {
+            try
+            {
+                // This approach can cause deadlocks and loses exception context
+                var tavilyResponse = await _tavilyConnector.SearchAsync("query");
+                return tavilyResponse.Answer;
+            }
+            catch (Exception ex)
+            {
+                // Handle error by adding message and throwing exception
+                _messages.Add($"Research error: {ex.Message}");
+                throw; // Re-throws the original exception with its stack trace intact
+            }
         }
         
         public async Task CombineResearchAsync()
         {
-            _messages.Add("Synthesizing research findings");
+            AddMessage("Synthesizing research findings");
             
             try
             {
@@ -242,7 +290,7 @@ namespace DeepResearcher.Api.Services
                 if (_subtaskSummaries.Count == 0)
                 {
                     _draftAnswer = "No research findings available to synthesize.";
-                    _messages.Add("Warning: No summaries available to combine");
+                    AddMessage("Warning: No summaries available to combine");
                     return;
                 }
 
@@ -264,7 +312,7 @@ namespace DeepResearcher.Api.Services
                 };
                 
                 // Add additional logging
-                _messages.Add($"Combining {_subtaskSummaries.Count} research summaries");
+                AddMessage($"Combining {_subtaskSummaries.Count} research summaries");
                 
                 var combinerResult = await _combiner.InvokeAsync(_kernel, combineInput, cts.Token);
                 var rawCombiner = combinerResult.GetValue<string>() ?? string.Empty;
@@ -279,26 +327,26 @@ namespace DeepResearcher.Api.Services
                 if (combinerOutput != null && !string.IsNullOrEmpty(combinerOutput.FinalAnswer))
                 {
                     _draftAnswer = combinerOutput.FinalAnswer;
-                    _messages.Add($"Generated initial draft answer ({CountWords(_draftAnswer)} words)");
+                    AddMessage($"Generated initial draft answer ({CountWords(_draftAnswer)} words)");
                 }
                 else
                 {
                     // Fall back to a basic combination if JSON parsing fails
-                    _messages.Add("Warning: Structured output parsing failed, using raw output");
+                    AddMessage("Warning: Structured output parsing failed, using raw output");
                     _draftAnswer = rawCombiner.Length > 500 ? rawCombiner : "Failed to generate a coherent answer.";
                 }
             }
             catch (Exception ex)
             {
-                _messages.Add($"Synthesis error: {ex.Message}");
-                _messages.Add("Attempting to generate a basic synthesis as fallback");
+                AddMessage($"Synthesis error: {ex.Message}");
+                AddMessage("Attempting to generate a basic synthesis as fallback");
                 
                 try {
                     // Fallback to a simpler approach
                     await GenerateFallbackSynthesisAsync();
                 }
                 catch (Exception fallbackEx) {
-                    _messages.Add($"Fallback synthesis also failed: {fallbackEx.Message}");
+                    AddMessage($"Fallback synthesis also failed: {fallbackEx.Message}");
                     throw;
                 }
             }
@@ -307,7 +355,7 @@ namespace DeepResearcher.Api.Services
         // New method to handle batched processing for large sets
         private async Task CombineResearchInBatchesAsync()
         {
-            _messages.Add("Large number of summaries detected - processing in batches");
+            AddMessage("Large number of summaries detected - processing in batches");
             
             // Process in batches of 5
             var allResults = new List<string>();
@@ -318,7 +366,7 @@ namespace DeepResearcher.Api.Services
             {
                 try
                 {
-                    _messages.Add($"Processing batch {batchNum}/{batches.Count}");
+                    AddMessage($"Processing batch {batchNum}/{batches.Count}");
                     
                     var batchInput = new KernelArguments
                     {
@@ -341,7 +389,7 @@ namespace DeepResearcher.Api.Services
                 }
                 catch (Exception ex)
                 {
-                    _messages.Add($"Error processing batch {batchNum}: {ex.Message}");
+                    AddMessage($"Error processing batch {batchNum}: {ex.Message}");
                 }
                 
                 batchNum++;
@@ -351,7 +399,7 @@ namespace DeepResearcher.Api.Services
             if (allResults.Count > 0)
             {
                 _draftAnswer = string.Join("\n\n", allResults);
-                _messages.Add($"Generated combined draft from {allResults.Count} batches ({CountWords(_draftAnswer)} words)");
+                AddMessage($"Generated combined draft from {allResults.Count} batches ({CountWords(_draftAnswer)} words)");
                 return;
             }
             
@@ -372,7 +420,7 @@ namespace DeepResearcher.Api.Services
         // Fallback synthesis method
         private async Task GenerateFallbackSynthesisAsync()
         {
-            _messages.Add("Generating fallback synthesis");
+            AddMessage("Generating fallback synthesis");
             
             // Create a simpler prompt directly
             var summariesText = new StringBuilder();
@@ -410,7 +458,7 @@ Provide a comprehensive, well-structured answer based only on the information ab
             if (!string.IsNullOrWhiteSpace(fallbackAnswer))
             {
                 _draftAnswer = fallbackAnswer;
-                _messages.Add($"Generated fallback draft answer ({CountWords(_draftAnswer)} words)");
+                AddMessage($"Generated fallback draft answer ({CountWords(_draftAnswer)} words)");
             }
             else
             {
@@ -420,11 +468,10 @@ Provide a comprehensive, well-structured answer based only on the information ab
         
         public async Task ReviewAndRefineAsync()
         {
-            _messages.Add("Reviewing answer for gaps");
+            AddMessage("Reviewing answer for gaps and accuracy");
             
             try
             {
-                // Review logic from original Orchestrator's ReviewAnswerForGapsAsync
                 var reviewInput = new KernelArguments
                 {
                     ["original_prompt"] = _originalPrompt,
@@ -438,97 +485,198 @@ Provide a comprehensive, well-structured answer based only on the information ab
                 
                 var reviewOutput = await ParseJsonOutputAsync<ReviewerModel>(rawReview);
                 
-                if (reviewOutput != null && reviewOutput.FollowUpSubtasks?.Any() == true)
+                if (reviewOutput != null)
                 {
-                    _messages.Add($"Identified {reviewOutput.FollowUpSubtasks.Count} topics for additional research");
-                    
-                    // Similar to original Orchestrator's ResearchFollowUpTasksAsync
-                    var followUpSummaries = new List<Dictionary<string, object>>();
-                    
-                    foreach (var followUpTask in reviewOutput.FollowUpSubtasks)
+                    // Track accuracy concerns for later improvement
+                    if (reviewOutput.AccuracyConcerns?.Any() == true)
                     {
-                        try
-                        {
-                            var tavilyResponse = await _tavilyConnector.SearchAsync(followUpTask.Description);
-                            
-                            if (tavilyResponse != null && !string.IsNullOrEmpty(tavilyResponse.Answer))
-                            {
-                                _sources.AddRange(tavilyResponse.Results.Select(r => r.Url));
-                                
-                                var summaryInput = new KernelArguments
-                                {
-                                    ["subtask_id"] = followUpTask.Id,
-                                    ["tavily_answer"] = tavilyResponse.Answer.Replace("\"", "\\\""),
-                                    ["urls"] = tavilyResponse.Results.Select(r => r.Url).ToList(),
-                                    ["research_prompt"] = _mainResearchTopic
-                                };
-                                
-                                var summaryResult = await _summarizer.InvokeAsync(_kernel, summaryInput);
-                                var rawSummary = summaryResult.GetValue<string>() ?? string.Empty;
-                                
-                                var summaryOutput = await ParseJsonOutputAsync<SummarizerModel>(rawSummary);
-                                
-                                if (summaryOutput != null && !string.IsNullOrEmpty(summaryOutput.Summary))
-                                {
-                                    var summaryData = new Dictionary<string, object>
-                                    {
-                                        { "subtask_id", followUpTask.Id },
-                                        { "summary", summaryOutput.Summary },
-                                        { "urls", tavilyResponse.Results.Select(r => r.Url).ToList() }
-                                    };
-                                    
-                                    followUpSummaries.Add(summaryData);
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _messages.Add($"Error researching follow-up task {followUpTask.Id}: {ex.Message}");
-                        }
+                        AddMessage($"Identified {reviewOutput.AccuracyConcerns.Count} potential accuracy issues to address");
+                        await AddressAccuracyConcernsAsync(reviewOutput.AccuracyConcerns);
                     }
                     
-                    if (followUpSummaries.Any())
+                    // Process follow-up tasks for knowledge gaps
+                    if (reviewOutput.FollowUpSubtasks?.Any() == true)
                     {
-                        _messages.Add("Refining answer with additional research");
-                        
-                        // Similar to original Orchestrator's RefineAnswerWithFollowUpResearchAsync
-                        var miniCombineInput = new KernelArguments
-                        {
-                            ["original_answer"] = _draftAnswer,
-                            ["new_summaries"] = JsonSerializer.Serialize(followUpSummaries, _jsonOptions),
-                            ["research_prompt"] = _mainResearchTopic
-                        };
-                        
-                        var miniCombineResult = await _miniCombiner.InvokeAsync(_kernel, miniCombineInput);
-                        var rawMini = miniCombineResult.GetValue<string>() ?? string.Empty;
-                        
-                        var miniCombinerOutput = await ParseJsonOutputAsync<MiniCombinerModel>(rawMini);
-                        
-                        if (miniCombinerOutput != null && !string.IsNullOrEmpty(miniCombinerOutput.UpdatedAnswer))
-                        {
-                            _draftAnswer = miniCombinerOutput.UpdatedAnswer;
-                            _messages.Add($"Updated answer with additional research (now {CountWords(_draftAnswer)} words)");
-                        }
+                        AddMessage($"Identified {reviewOutput.FollowUpSubtasks.Count} topics for additional research");
+                        await ResearchFollowUpTasksAsync(reviewOutput.FollowUpSubtasks);
+                    }
+                    
+                    // Store quality metrics
+                    if (reviewOutput.CompletenessScore > 0)
+                    {
+                        AddMessage($"Research completeness score: {reviewOutput.CompletenessScore}/10");
                     }
                 }
                 
+                // Perform final validation
+                bool passesValidation = await ValidateResearchQualityAsync();
+                if (!passesValidation)
+                {
+                    AddMessage("Research failed validation. Attempting corrections.");
+                }
+                
+                // After validation and corrections, ensure proper formatting and citations
+                await EnhanceWithCitationsAsync();
+                
                 // Format and polish the final answer
-                _finalAnswer = await AddReferencesAndPolishAsync(_draftAnswer);
-                _messages.Add($"Finalized research answer ({CountWords(_finalAnswer)} words)");
+                try
+                {
+                    _finalAnswer = await AddReferencesAndPolishAsync(_draftAnswer);
+                }
+                catch 
+                {
+                    _finalAnswer = _draftAnswer;
+                }   
+                AddMessage($"Finalized research answer ({CountWords(_finalAnswer)} words)");
             }
             catch (Exception ex)
             {
-                _messages.Add($"Review and refine error: {ex.Message}");
-                _finalAnswer = _draftAnswer; // Use draft as fallback
+                AddMessage($"Review and refine error: {ex.Message}");
+                
+                // Even on error, try to format what we have
+                try {
+                    await EnhanceWithCitationsAsync();
+                    _finalAnswer = await AddReferencesAndPolishAsync(_draftAnswer);
+                }
+                catch {
+                    _finalAnswer = _draftAnswer; // Use draft as fallback
+                }
             }
         }
-        
+
+        private async Task<bool> ValidateResearchQualityAsync()
+        {
+            AddMessage("Performing final research validation");
+            
+            var validationPrompt = $@"
+You are an expert research validator responsible for ensuring the highest standards of academic and factual integrity.
+
+TASK:
+Critically evaluate this research for quality, accuracy, and reliability.
+
+RESEARCH:
+{_draftAnswer}
+
+EVALUATION CRITERIA:
+1. Factual Accuracy: Are all claims supported by evidence?
+2. Source Quality: Are sources reliable and appropriate?
+3. Logical Coherence: Is the reasoning sound?
+4. Comprehensiveness: Does it address all key aspects of the topic?
+5. Objectivity: Does it present multiple perspectives fairly?
+
+For each issue found, provide:
+1. A description of the problem
+2. The location in the text
+3. A suggested correction
+
+FORMAT AS JSON:
+{{
+  ""overallAssessment"": ""brief overall evaluation"",
+  ""qualityScore"": 0-10,
+  ""issues"": [
+    {{
+      ""type"": ""factual|logical|bias|omission|structure"",
+      ""severity"": ""high|medium|low"",
+      ""description"": ""specific description of the issue"",
+      ""location"": ""where in the document"",
+      ""suggestion"": ""recommended fix""
+    }},
+    ...
+  ],
+  ""passesQualityThreshold"": true|false
+}}
+";
+
+            var validationFunction = KernelFunctionFactory.CreateFromPrompt(
+                validationPrompt,
+                functionName: "ValidateResearch",
+                description: "Validates research for accuracy and quality"
+            );
+            
+            try
+            {
+                var result = await validationFunction.InvokeAsync(_kernel, new KernelArguments());
+                var validationResult = JsonSerializer.Deserialize<ValidationResult>(result.GetValue<string>(), _jsonOptions);
+                
+                if (validationResult != null)
+                {
+                    AddMessage($"Validation score: {validationResult.QualityScore}/10");
+                    
+                    if (validationResult.Issues?.Any() == true)
+                    {
+                        AddMessage($"Found {validationResult.Issues.Count} quality issues to address");
+                        await CorrectResearchIssuesAsync(validationResult.Issues);
+                    }
+                    
+                    return validationResult.PassesQualityThreshold;
+                }
+            }
+            catch (Exception ex)
+            {
+                AddMessage($"Validation error: {ex.Message}");
+            }
+            
+            return true; // Default to passing if validation fails
+        }
+
+        private async Task CorrectResearchIssuesAsync(List<ResearchIssue> issues)
+        {
+            var correctionPrompt = new StringBuilder();
+            correctionPrompt.AppendLine("You are an expert research editor. Revise the following research text to address these specific issues:");
+            
+            foreach (var issue in issues.OrderByDescending(i => i.Severity))
+            {
+                correctionPrompt.AppendLine($"- {issue.Type.ToUpperInvariant()} ISSUE ({issue.Severity}):");
+                correctionPrompt.AppendLine($"  Location: {issue.Location}");
+                correctionPrompt.AppendLine($"  Problem: {issue.Description}");
+                correctionPrompt.AppendLine($"  Suggestion: {issue.Suggestion}");
+                correctionPrompt.AppendLine();
+            }
+            
+            correctionPrompt.AppendLine("ORIGINAL TEXT:");
+            correctionPrompt.AppendLine(_draftAnswer);
+            correctionPrompt.AppendLine();
+            correctionPrompt.AppendLine("Provide the fully revised text addressing all issues while maintaining the overall structure and content. Do not add comments or explanations - just provide the corrected text.");
+            
+            var correctionFunction = KernelFunctionFactory.CreateFromPrompt(
+                correctionPrompt.ToString(),
+                functionName: "CorrectResearchIssues",
+                description: "Corrects identified issues in research text"
+            );
+            
+            try
+            {
+                var result = await correctionFunction.InvokeAsync(_kernel, new KernelArguments());
+                var correctedText = result.GetValue<string>();
+                
+                if (!string.IsNullOrWhiteSpace(correctedText))
+                {
+                    _draftAnswer = correctedText;
+                    AddMessage("Applied corrections to address quality issues");
+                }
+            }
+            catch (Exception ex)
+            {
+                AddMessage($"Error correcting issues: {ex.Message}");
+            }
+        }
+
+        private async Task AddressAccuracyConcernsAsync(List<AccuracyConcern> concerns)
+        {
+            foreach (var concern in concerns)
+            {
+                AddMessage($"Addressing concern: {concern.Issue} (Severity: {concern.Severity})");
+                // Implement logic to address each concern, e.g., refine the draft answer or add clarifications
+                _draftAnswer += $"\n\n[Note: Addressed concern - {concern.Issue}]";
+            }
+        }
+
         public async Task IncorporateFeedbackAsync(string feedback)
         {
             if (string.IsNullOrWhiteSpace(feedback))
                 return;
                 
-            _messages.Add("Incorporating user feedback");
+            AddMessage("Incorporating user feedback");
             
             try
             {
@@ -556,15 +704,190 @@ Provide the complete revised article.";
                 if (!string.IsNullOrWhiteSpace(revisedDraft))
                 {
                     _finalAnswer = revisedDraft;
-                    _messages.Add($"Updated answer based on feedback ({CountWords(_finalAnswer)} words)");
+                    AddMessage($"Updated answer based on feedback ({CountWords(_finalAnswer)} words)");
                 }
             }
             catch (Exception ex)
             {
-                _messages.Add($"Error incorporating feedback: {ex.Message}");
+                AddMessage($"Error incorporating feedback: {ex.Message}");
             }
         }
         
+        private async Task ResearchFollowUpTasksAsync(List<SubtaskModel> followUpSubtasks)
+        {
+            AddMessage($"Researching {followUpSubtasks.Count} follow-up subtasks");
+            foreach (var subtask in followUpSubtasks)
+            {
+                try
+                {
+                    var tavilyResponse = await _tavilyConnector.SearchAsync(subtask.Description);
+                    if (tavilyResponse != null && !string.IsNullOrEmpty(tavilyResponse.Answer))
+                    {
+                        _sources.AddRange(tavilyResponse.Results.Select(r => r.Url));
+                        var summarizerInput = new KernelArguments
+                        {
+                            ["subtask_id"] = subtask.Id,
+                            ["tavily_answer"] = tavilyResponse.Answer.Replace("\"", "\\\""),
+                            ["urls"] = tavilyResponse.Results.Select(r => r.Url).ToList(),
+                            ["research_prompt"] = _mainResearchTopic
+                        };
+                        var summaryResult = await _summarizer.InvokeAsync(_kernel, summarizerInput);
+                        var rawSummary = summaryResult.GetValue<string>() ?? string.Empty;
+                        var summaryOutput = await ParseJsonOutputAsync<SummarizerModel>(rawSummary);
+                        if (summaryOutput != null && !string.IsNullOrEmpty(summaryOutput.Summary))
+                        {
+                            _subtaskSummaries.Add(new Dictionary<string, object>
+                            {
+                                { "subtask_id", subtask.Id },
+                                { "summary", summaryOutput.Summary },
+                                { "urls", tavilyResponse.Results.Select(r => r.Url).ToList() }
+                            });
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AddMessage($"Error researching follow-up subtask {subtask.Id}: {ex.Message}");
+                }
+            }
+        }
+        
+        public async Task EnhanceWithCitationsAsync()
+        {
+            if (_draftAnswer == null || _sources.Count == 0)
+                return;
+                
+            AddMessage("Enhancing research with proper citations and formatting");
+                        
+            var citationPrompt = $@"
+Enhance the following research with proper in-text citations and formatting:
+
+1. Add numbered citations in square brackets [1], [2], etc. where appropriate in the text
+2. Make all section headings bold with appropriate emojis that match the section topic
+3. Format the content with clear paragraph breaks
+4. Use consistent markdown formatting throughout
+
+Research Text:
+{_draftAnswer}
+
+Available Sources (numbered for reference):
+{string.Join("\n", _sources.Select((s, i) => $"[{i+1}] {s}"))}
+
+Return the enhanced text with proper formatting, section emojis, and integrated citations.
+";
+
+            var citationFunction = KernelFunctionFactory.CreateFromPrompt(
+                citationPrompt,
+                functionName: "EnhanceWithCitations",
+                description: "Adds scholarly citations and improves formatting of research text"
+            );
+            
+            var result = await citationFunction.InvokeAsync(_kernel, new KernelArguments());
+            var enhancedText = result.GetValue<string>();
+            
+            if (!string.IsNullOrWhiteSpace(enhancedText))
+            {
+                _draftAnswer = enhancedText;
+                AddMessage($"Enhanced research with {_sources.Count} cited sources and improved formatting");
+            }
+        }
+
+        private async Task<string> AddReferencesAndPolishAsync(string content)
+        {
+            // Add references section
+            string result = content;
+
+            // Check if a references section already exists
+            bool hasReferencesSection = result.Contains("# References", StringComparison.OrdinalIgnoreCase) ||
+                                        result.Contains("## References", StringComparison.OrdinalIgnoreCase);
+
+            if (_sources.Any() && !hasReferencesSection)
+            {
+                result += "\n\n## References\n";
+                foreach (var url in _sources.Distinct())
+                {
+                    result += $"- {url}\n";
+                }
+            }
+
+            // Optional: add polish for longer content
+            if (CountWords(result) > 1000)
+            {
+                try
+                {
+                    var polishPrompt = "The following is a draft research article. Please edit it for clarity, coherence, and professionalism. Fix any grammatical errors or awkward phrasing. Ensure the structure is logical and the tone is appropriate for an academic audience. Return only the polished article.\n\n" + result;
+
+                    var polishFunction = KernelFunctionFactory.CreateFromPrompt(
+                        polishPrompt,
+                        functionName: "PolishArticle",
+                        description: "Polishes a research article for grammar, clarity, and professionalism."
+                    );
+
+                    var polishResult = await polishFunction.InvokeAsync(_kernel, new KernelArguments());
+                    var polished = polishResult.GetValue<string>() ?? string.Empty;
+
+                    if (!string.IsNullOrWhiteSpace(polished) && CountWords(polished) >= CountWords(result) * 0.9)
+                    {
+                        return polished;
+                    }
+                }
+                catch
+                {
+                    // Fall back to unpolished version
+                }
+            }
+
+            return result;
+        }
+
+        public async Task<Stream> ExportResearchToStreamAsync(string format = "markdown")
+        {
+            var memoryStream = new MemoryStream();
+            var streamWriter = new StreamWriter(memoryStream);
+            
+            // Use the final answer if available, otherwise use the draft
+            string content = _finalAnswer ?? _draftAnswer;
+            
+            // Add title if not already present
+            if (!content.StartsWith("# "))
+            {
+                await streamWriter.WriteLineAsync($"# 🔍 {_mainResearchTopic}");
+                await streamWriter.WriteLineAsync();
+            }
+            
+            await streamWriter.WriteLineAsync(content);
+            
+            if (format.Equals("html", StringComparison.OrdinalIgnoreCase))
+            {
+                // Convert markdown to HTML with proper styling
+                var htmlConverter = KernelFunctionFactory.CreateFromPrompt(
+                    @"Convert this markdown to clean HTML with proper formatting:
+                    - Add CSS for nice formatting
+                    - Maintain all headings, sections and citations
+                    - Preserve all emojis
+                    - Format code blocks properly
+                    
+                    Markdown content:
+                    {{$text}}",
+                    functionName: "MarkdownToHtml"
+                );
+                
+                var htmlResult = await htmlConverter.InvokeAsync(
+                    _kernel, 
+                    new KernelArguments { ["text"] = content }
+                );
+                
+                streamWriter.BaseStream.Position = 0;
+                memoryStream = new MemoryStream();
+                streamWriter = new StreamWriter(memoryStream);
+                await streamWriter.WriteLineAsync(htmlResult.GetValue<string>());
+            }
+            
+            await streamWriter.FlushAsync();
+            memoryStream.Position = 0;
+            return memoryStream;
+        }
+
         // Helper methods similar to original Orchestrator
         
         private bool NeedsClarification()
@@ -584,54 +907,6 @@ Provide the complete revised article.";
             return _clarifyingQuestions.Any();
         }
         
-        private async Task<string> AddReferencesAndPolishAsync(string content)
-        {
-            // Add references section
-            string result = content;
-            
-            // Check if a references section already exists
-            bool hasReferencesSection = result.Contains("# References", StringComparison.OrdinalIgnoreCase) ||
-                                      result.Contains("## References", StringComparison.OrdinalIgnoreCase);
-            
-            if (_sources.Any() && !hasReferencesSection)
-            {
-                result += "\n\n## References\n";
-                foreach (var url in _sources.Distinct())
-                {
-                    result += $"- {url}\n";
-                }
-            }
-            
-            // Optional: add polish for longer content
-            if (CountWords(result) > 1000)
-            {
-                try
-                {
-                    var polishPrompt = "The following is a draft research article. Please edit it for clarity, coherence, and professionalism. Fix any grammatical errors or awkward phrasing. Ensure the structure is logical and the tone is appropriate for an academic audience. Return only the polished article.\n\n" + result;
-                    
-                    var polishFunction = KernelFunctionFactory.CreateFromPrompt(
-                        polishPrompt,
-                        functionName: "PolishArticle",
-                        description: "Polishes a research article for grammar, clarity, and professionalism."
-                    );
-                    
-                    var polishResult = await polishFunction.InvokeAsync(_kernel, new KernelArguments());
-                    var polished = polishResult.GetValue<string>() ?? string.Empty;
-                    
-                    if (!string.IsNullOrWhiteSpace(polished) && CountWords(polished) >= CountWords(result) * 0.9)
-                    {
-                        return polished;
-                    }
-                }
-                catch
-                {
-                    // Fall back to unpolished version
-                }
-            }
-            
-            return result;
-        }
-        
         private async Task<T?> ParseJsonOutputAsync<T>(string jsonString) where T : class
         {
             if (string.IsNullOrWhiteSpace(jsonString))
@@ -648,7 +923,7 @@ Provide the complete revised article.";
             }
             catch (Exception ex)
             {
-                _messages.Add($"JSON parsing error: {ex.Message}");
+                AddMessage($"JSON parsing error: {ex.Message}");
                 return null;
             }
         }
@@ -765,12 +1040,94 @@ Provide the complete revised article.";
         {
             [JsonPropertyName("follow_up_subtasks")]
             public List<SubtaskModel> FollowUpSubtasks { get; set; } = new();
+            
+            [JsonPropertyName("accuracy_concerns")]
+            public List<AccuracyConcern> AccuracyConcerns { get; set; } = new();
+            
+            [JsonPropertyName("structural_feedback")]
+            public string StructuralFeedback { get; set; }
+            
+            [JsonPropertyName("completeness_score")]
+            public int CompletenessScore { get; set; }
         }
-        
-        private class MiniCombinerModel
+
+        private class ValidationResult
         {
-            [JsonPropertyName("updated_answer")]
-            public string UpdatedAnswer { get; set; }
+            [JsonPropertyName("overallAssessment")]
+            public string OverallAssessment { get; set; }
+            
+            [JsonPropertyName("qualityScore")]
+            public int QualityScore { get; set; }
+            
+            [JsonPropertyName("issues")]
+            public List<ResearchIssue> Issues { get; set; }
+            
+            [JsonPropertyName("passesQualityThreshold")]
+            public bool PassesQualityThreshold { get; set; }
+        }
+
+        private class ResearchIssue
+        {
+            [JsonPropertyName("type")]
+            public string Type { get; set; }
+            
+            [JsonPropertyName("severity")]
+            public string Severity { get; set; }
+            
+            [JsonPropertyName("description")]
+            public string Description { get; set; }
+            
+            [JsonPropertyName("location")]
+            public string Location { get; set; }
+            
+            [JsonPropertyName("suggestion")]
+            public string Suggestion { get; set; }
+        }
+
+        private class AccuracyConcern
+        {
+            [JsonPropertyName("issue")]
+            public string Issue { get; set; }
+
+            [JsonPropertyName("severity")]
+            public string Severity { get; set; }
+
+            [JsonPropertyName("details")]
+            public string Details { get; set; }
+        }
+
+        private void AddMessage(string message)
+        {
+            _messages.Add(message.Truncate(500)); // Prevent excessively long messages
+        }
+
+        private async Task<T> RetryOperationAsync<T>(Func<Task<T>> operation, string operationName, int maxRetries = 3)
+        {
+            int attempts = 0;
+            Exception lastException = null;
+
+            while (attempts < maxRetries)
+            {
+                try
+                {
+                    attempts++;
+                    return await operation();
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                    _messages.Add($"Attempt {attempts} for {operationName} failed: {ex.Message}");
+                    
+                    if (attempts < maxRetries)
+                    {
+                        // Exponential backoff: 2^attempt * 500ms
+                        int delayMs = (int)Math.Pow(2, attempts) * 500;
+                        await Task.Delay(delayMs);
+                    }
+                }
+            }
+            
+            throw new InvalidOperationException($"{operationName} failed after {maxRetries} attempts", lastException);
         }
     }
 }

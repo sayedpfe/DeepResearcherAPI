@@ -1,10 +1,13 @@
 using DeepResearcher.Api.Models;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.SemanticKernel;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using DeepResearcher.Api.Models;
+using DeepResearcher.Api.Services;
 
 namespace DeepResearcher.Api.Services
 {
@@ -13,12 +16,14 @@ namespace DeepResearcher.Api.Services
         private readonly IMemoryCache _cache;
         private readonly Kernel _kernel;
         private readonly TavilyConnector _tavilyConnector;
+        private readonly IServiceProvider _serviceProvider;
 
-        public ResearchService(IMemoryCache cache, Kernel kernel, TavilyConnector tavilyConnector)
+        public ResearchService(IMemoryCache cache, Kernel kernel, TavilyConnector tavilyConnector, IServiceProvider serviceProvider)
         {
             _cache = cache ?? throw new ArgumentNullException(nameof(cache));
             _kernel = kernel ?? throw new ArgumentNullException(nameof(kernel));
             _tavilyConnector = tavilyConnector ?? throw new ArgumentNullException(nameof(tavilyConnector));
+            _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         }
 
         public async Task<string> StartResearchSessionAsync(string query)
@@ -31,16 +36,12 @@ namespace DeepResearcher.Api.Services
             // Create a new session ID
             string sessionId = Guid.NewGuid().ToString("N");
             
-            // Create a new orchestrator for this session
-            var orchestrator = new ResearchOrchestrator(_kernel, _tavilyConnector);
-            
             // Create initial session state
             var sessionState = new ResearchSessionState
             {
                 SessionId = sessionId,
                 InitialQuery = query,
                 CurrentPhase = ResearchPhase.Clarification,
-                Orchestrator = orchestrator,
                 Status = "Research session started",
                 Messages = new List<string> { "Session initialized" }
             };
@@ -51,20 +52,28 @@ namespace DeepResearcher.Api.Services
                 SlidingExpiration = TimeSpan.FromHours(1)
             });
             
-            // Start the clarification process asynchronously
-            _ = Task.Run(async () =>
-            {
-                try
-                {
+            // Check if we have semantic cache hit for similar research
+            var researchCache = _serviceProvider.GetRequiredService<ResearchCache>();
+            var cachedResult = await researchCache.GetOrCreateResearchAsync(
+                query,
+                async () => {
+                    // Create a new orchestrator for this session
+                    var orchestrator = new ResearchOrchestrator(_kernel, _tavilyConnector);
+                    sessionState.Orchestrator = orchestrator;
+                    
+                    // Start the clarification process asynchronously
                     await orchestrator.InitializeResearchAsync(query);
-                    sessionState.ClarificationState = await orchestrator.GetClarificationStateAsync();
-                }
-                catch (Exception ex)
-                {
-                    sessionState.Status = $"Error during initialization: {ex.Message}";
-                    sessionState.Messages.Add($"Error: {ex.Message}");
-                }
-            });
+                    return ""; // Actual research happens later
+                });
+            
+            if (cachedResult.IsCacheHit)
+            {
+                sessionState.Status = "Found similar previous research (will offer as starting point)";
+                sessionState.CachedResearch = cachedResult;
+            }
+            
+            // Continue with clarification as normal
+            sessionState.ClarificationState = await sessionState.Orchestrator.GetClarificationStateAsync();
             
             return sessionId;
         }
@@ -376,6 +385,7 @@ namespace DeepResearcher.Api.Services
             public ClarificationState ClarificationState { get; set; } = new();
             public List<SubtaskState> Subtasks { get; set; } = new();
             public List<string> Messages { get; set; } = new();
+            public CachedResearchResult CachedResearch { get; set; }
         }
         
         public class ClarificationState

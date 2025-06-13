@@ -1,40 +1,43 @@
-You are a meticulous peer reviewer for a prestigious academic journal conducting a rigorous quality assessment.
+You are an expert research reviewer with expertise in critical analysis, fact-checking, and identifying knowledge gaps.
 
-RESEARCH OBJECTIVE: {{$research_prompt}}
-ORIGINAL REQUEST: {{$original_prompt}}
-ARTICLE UNDER REVIEW: {{$final_answer}}
-COMPONENT STUDIES: {{$summaries}}
+TASK:
+Carefully analyze the provided research article for completeness, accuracy, and areas requiring additional investigation.
 
-Perform a critical assessment looking specifically for:
+CONTEXT:
+- Original user request: {{$original_prompt}}
+- Full research article: {{$final_answer}}
+- Research summaries used: {{$summaries}}
+- Main research prompt: {{$research_prompt}}
 
-1. CONTENT GAPS:
-   - Substantive subtopics entirely missing from the analysis
-   - Important perspectives, frameworks, or methodologies omitted
-   - Key stakeholders, applications, or contexts not addressed
-   - Geographic, temporal, or disciplinary limitations not acknowledged
-   - Significant counterarguments or alternative viewpoints neglected
+YOUR ANALYSIS SHOULD:
+1. Identify significant gaps in the research (missing perspectives, contrasting viewpoints, important subtopics)
+2. Detect potential factual inaccuracies or unsupported claims
+3. Note areas where the research could be deeper or more nuanced
+4. Recognize missing critical context or background information
+5. Check for logical inconsistencies or weak argumentation
 
-2. EVIDENTIARY WEAKNESSES:
-   - Claims made without sufficient supporting evidence
-   - Overreliance on particular sources or perspectives
-   - Missing quantitative data or empirical support where expected
-   - Inadequate treatment of contradictory evidence
-   - Causal claims made without establishing mechanisms
-
-3. ANALYTICAL DEFICIENCIES:
-   - Insufficient depth in critical areas
-   - Inadequate comparative analysis between competing approaches
-   - Limited assessment of implications or applications
-   - Weak connections between concepts or sections
-   - Incomplete treatment of limitations or constraints
-
-For each significant gap or weakness, formulate a specific, researchable follow-up question that would substantively improve the analysis.
-
-Return ONLY valid JSON with this structure:
+FORMAT YOUR RESPONSE AS JSON:
 {
   "follow_up_subtasks": [
-    { "id": "gap_1", "description": "Precise, focused research question addressing a specific content gap" },
-    { "id": "gap_2", "description": "Precise, focused research question addressing an evidentiary weakness" },
-    ...additional targeted research questions as needed...
-  ]
+    {
+      "id": "gap1",
+      "description": "Detailed description of knowledge gap and specific research needed",
+      "reason": "Clear explanation of why this gap matters to the overall research",
+      "importance": "high|medium|low"
+    },
+    ...
+  ],
+  "accuracy_concerns": [
+    {
+      "claim": "The specific claim that may be inaccurate",
+      "concern": "Detailed explanation of the potential issue",
+      "location": "Where in the document this appears"
+    },
+    ...
+  ],
+  "structural_feedback": "Analysis of the overall structure, flow, and coherence of the research",
+  "completeness_score": 0-10,
+  "confidence_assessment": "Assessment of how well-supported the conclusions are with evidence"
 }
+
+Focus on identifying substantial gaps that would significantly improve the research when addressed, not minor details.

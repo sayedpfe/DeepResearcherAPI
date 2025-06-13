@@ -68,6 +68,9 @@ try
 
     // Add research service
     builder.Services.AddScoped<IResearchService, ResearchService>();
+
+    // Add ResearchCache
+    builder.Services.AddSingleton<ResearchCache>();
     
     // Add CORS
     builder.Services.AddCors(options =>

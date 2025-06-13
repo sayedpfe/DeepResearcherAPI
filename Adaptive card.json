@@ -1,0 +1,25 @@
+{
+  "type": "AdaptiveCard",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "TextBlock",
+      "text": "Research Status",
+      "weight": "Bolder",
+      "size": "Medium"
+    },
+    {
+      "type": "TextBlock",
+      "text": "Topic.status",
+      "wrap": true
+    },
+    {
+      "type": "TextBlock",
+      "text": "Current Phase: "
+      "&Topic.currentPhase",
+      ,
+      "wrap": true
+    }
+  ],
+  "$schema": "https://adaptivecards.io/schemas/adaptive-card.json"
+}
